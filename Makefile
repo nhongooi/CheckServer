@@ -10,13 +10,13 @@ threadPool.o: threadPool.c threadPool.h
 clean:
 	rm -v checkServer.o threadPool.o
 
-test: server
-	valgrind --leak-check=full ./server
+val: server
+	valgrind --leak-check=full --tool=memcheck ./server
 
-debug: checkServer.c threadPool.c
-	gcc -g -o test checkServer.c threadPool.c -pthread
+debug: checkServer.o threadPool.o
+	gcc -g -o test checkServer.o threadPool.o -pthread
 
-warn: checkServer.c threadPool.c
-	gcc -Wall checkServer.c threadPool.c -o server -pthread
-run:
+check: checkServer.o threadPool.o
+	gcc -Wall checkServer.o threadPool.o -o server -pthread
+run: server
 	./server

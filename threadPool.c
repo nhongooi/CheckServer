@@ -105,14 +105,15 @@ void threadpool_work(struct threadpool *pool){
 				pool->queue->sockets[head] = 0;
 				(pool->queue->count)--;
 				// since server cant just be blocked, this is a way to communicate with server
-				if((pool->queue->count) != (pool->queue->size))
+				if((pool->queue->count) < (pool->queue->size))
 					pool->queue->isfull = 0;
 		if(pthread_mutex_unlock(&(pool->queue->job_mutex)) != 0) raise_error("thread mutex");
 		// end of lock
+		printf("Thread: %d - servicing: %d\n",tposition, socket);
 		//start word checking with the socket 
 		status = wordChecking(socket);
-		if(status == -1) raise_error("thread wordChecking");
-
+		if(status <0) raise_error("thread wordChecking");
+		
 		// finsihed its work, go back to waiting
 		pool->workers[tposition]->iswait = 1; 
 	}
