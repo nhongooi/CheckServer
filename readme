@@ -1,0 +1,16 @@
+Simple Check Server
+    To Use: run server $(External Dictionary) $(Port). there must be an external Dictionary
+    to add port, else it will run at 8080 with default dictionary.
+
+    The server will prints its listening port and IPv4 addresses.
+    
+    the server will print accepted peer's IPv4 address.
+
+    the server will print when a thread accpets a client to run its spell checker.
+
+    there is no quit.
+
+    remember to use fuser -k $(port)/tcp to kill all process hogging the default or 
+    assigned port before using.
+
+    

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "checkserver.h": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "stropts.h": "c"
     }
 }

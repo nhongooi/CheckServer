@@ -10,6 +10,7 @@
 struct threadpool *threadpool_init(int thread_num, int queue_size){   
 	struct threadpool *pool;
 	int i;
+	//check to be within limits
 	if((thread_num < 1 ) || (queue_size < 1) || (thread_num > MAX_THREAD)|| (queue_size > MAX_QUEUE))
 		raise_error("beyond max queue size or thread");
 
@@ -43,6 +44,7 @@ struct threadpool *threadpool_init(int thread_num, int queue_size){
 	for(i=0;i < thread_num;++i){
 		pool->workers[i] = (struct thread *) malloc(sizeof(struct thread));
 		pool->workers[i]->iswait = 1;
+		//loop all threads to checking dict
 		if(pthread_create(&(pool->workers[i]->tid),NULL,(void *)threadpool_work, (struct threadpool *) pool) != 0)
 			raise_error("thread creating");
 	}
@@ -59,6 +61,7 @@ int threadpool_add(struct threadpool *pool, int socket){
 	if(pthread_mutex_lock(&(pool->queue->job_mutex)) != 0) 
 		return EXIT_FAILURE;
 
+	//check if full, release lock and return to a loop till queue is empty
 	if(pool->queue->isfull == 1){
 		if(pthread_mutex_unlock(&(pool->queue->job_mutex)) != 0) return EXIT_FAILURE;		
 		return pool->queue->isfull;
@@ -90,6 +93,7 @@ void threadpool_work(struct threadpool *pool){
 	int status;
 
 	while(1){
+		//wait for queue to fill
 		if(sem_wait(&pool->queue->isempty) != 0) raise_error("thread sem");		
 		//start of lock 
 		if(pthread_mutex_lock(&(pool->queue->job_mutex)) != 0) raise_error("thread mutex");
@@ -139,7 +143,7 @@ int threadpool_isbusy(struct threadpool *pool){
 
 	return yes;
 }
-
+// check for malloc error
 void check_ptr(void* ptr){
 	if(!ptr)
 		raise_error("Failed memory allocation");

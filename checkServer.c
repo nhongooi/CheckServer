@@ -7,6 +7,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#include <unistd.h>
 // Global define value
 #define DEF_PORT "8080" // default port
 #define MAX_THREAD 10
@@ -89,12 +90,14 @@ int server_start(struct threadpool *pool, char *port){
         if ((connfd = accept(listenfd, (struct sockaddr *)&client_sock, (socklen_t*) &client_len)) < 0)
             raise_error("socket accept");
         //wait til the queue is free
-        //print peer ip
-        print_peerip(connfd);
+        
+        //busy waiting for queue to be empty
         do{
             //returns 1 if full, -1 for error and 0 for EXIT_SUCESS        
             if((status = threadpool_add(pool, connfd)) < 0) fprintf(stderr, "Error adding client to queue\n");
         }while(status != 0);   
+        //print peer ip
+        print_peerip(connfd);
     }
     // shutdown all sockets
     if(shutdown(listenfd, 2) < 0) raise_error("closing listenfd");
@@ -103,46 +106,50 @@ int server_start(struct threadpool *pool, char *port){
 }
 // checking each word through library and send back reposnse through socket
 int wordChecking(int socket){
-    char *buf; // buffering for sent char
+    char *buf = malloc(sizeof(char) * BUFF_SIZE); // buffering for sent char
     int iscorrect = 0;
-    int recv_size = 0; // recv returns bit size
     char *ok = "-OK\n";
     char *miss = "-MISSPELLED\n";
     int ok_size = strlen(ok);
     int miss_size = strlen(miss);
     int i;
-    char *temp;
     int len;
-    do{
+    int recv_size;
+    check_ptr(buf);
+
+    while((recv_size = recv(socket,buf, sizeof(char)* BUFF_SIZE,0)) > 1){
         //get message from socket to buf and size of by bytes to recv_size
-        recv_size = recv(socket, buf, sizeof(buf), 0);
-        if(recv_size <2) break; // gotta check if only null or/and \n, ends here
-        temp = remove_n(buf, recv_size);
-        len = strlen(temp);
+        buf = remove_n(buf, recv_size);
+        len = strlen(buf);
         //loop through dictionary
         for(i = 0; i < main_dict->entries; i++){
             //if found a match in dictionary, correct spelling
-            if((strcmp(temp,main_dict->word_list[i])) == 0){
-                temp[len-1] = '\0';
-                len = strlen(temp);
-                strncat(temp, ok, len+ok_size);
-                if(send(socket, temp, strlen(temp),0) <0) raise_error("correct send");
+            if((strcmp(buf,main_dict->word_list[i])) == 0){
+                // remove \n to strcat
+                buf[len-1] = '\0';
+                len = strlen(buf);
+                // cat OK
+                strncat(buf, ok, len+ok_size);
+                if(send(socket, buf, strlen(buf),0) <0) raise_error("correct send");
                 iscorrect = 1;
                 break;
             }
         }
         // if there was no correct spelling
         if(iscorrect == 0){
-          temp[len-1] = '\0';
-          len = strlen(temp);
-          strncat(temp, miss, len+miss_size);
-          if(send(socket, temp, strlen(temp),0) <0) raise_error("correct send"); 
-            
+        //remove \n to strcat
+          buf[len-1] = '\0';
+          len = strlen(buf);
+          strncat(buf, miss, len+miss_size);
+          if(send(socket, buf, strlen(buf),0) <0) raise_error("correct send"); 
         }
         //gotta reset this for next word
         iscorrect = 0;
-    }while(recv_size > 0); 
-
+        free(buf);
+        buf = malloc(sizeof(char) *BUFF_SIZE);
+        check_ptr(buf);
+    }
+    free(buf);
     // end comm and close socket  
     if(shutdown(socket, 2) < 0) return EXIT_FAILURE;
 
@@ -159,6 +166,7 @@ struct dictionary *Dictionary_init(char *dict_name){
     struct dictionary *dict;
 
     dict = (struct dictionary *) malloc(sizeof(struct dictionary));
+    check_ptr(dict);
     //set dictionary name
     if(dict_name == NULL)
         dict->name = DEF_DICT;
@@ -179,6 +187,7 @@ struct dictionary *Dictionary_init(char *dict_name){
 
     //malloc and set words to  dictionary
     dict->word_list = (char **)malloc(len*sizeof (char*));
+    check_ptr(dict->word_list);
     while(getline(&buffer, &buf_size, fd) != -1){
         dict->word_list[pos] = buffer;
         buffer = NULL;
@@ -190,10 +199,13 @@ struct dictionary *Dictionary_init(char *dict_name){
 }
 //print client IP
 void print_peerip(int socketfd){
+    //setip peer sock 
     struct sockaddr_in peer_addr;
     socklen_t addr_len = sizeof(struct sockaddr_in);
     char clientip[20];
+    //get ip
     int tempfd = getpeername(socketfd,(struct sockaddr *)&peer_addr, &addr_len);
+    //convert from network to readbable bits
     strcpy(clientip, inet_ntoa(peer_addr.sin_addr));
     printf("Client %s with FD %d - Added\n",clientip,socketfd);
 }
@@ -212,6 +224,7 @@ void print_hostip(){
             sock_local = (struct sockaddr_in *) temp->ifa_addr;
             printf("\t%s: %s\n", temp->ifa_name, inet_ntoa(sock_local->sin_addr));
         }
+        // get all 
         temp = temp->ifa_next;
     }
     // freeing to prevent mem leak
@@ -220,13 +233,17 @@ void print_hostip(){
 //remove \r \n \t to clean up the word
 char *remove_n(char *word, int word_len){
     char *temp = (char *)malloc(sizeof(char)*(word_len+1));
+    check_ptr(temp);
     int pos =0;
-    for(int i = 0; i < word_len; i++){
+    int i;
+    // go through for all \n or \r or \t, remove them
+    for(i = 0; i < word_len; i++){
         if((word[i] != '\n') && (word[i] != '\r') && (word[i] != '\t')){
             temp[pos] = word[i];
             pos++;
         }
     }
+    //format at to compare
     temp[pos] = '\n';
     temp[pos+1] = '\0';
     return temp;
